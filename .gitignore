@@ -1,0 +1,10 @@
+*.pio*
+.pio/
+.sconsign.dblite
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.orig
+*.rej
