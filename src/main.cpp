@@ -11,7 +11,8 @@ static constexpr uint8_t PIN_SD_CS = 5;
 static constexpr uint8_t PIN_SD_MOSI = 23;
 static constexpr uint8_t PIN_SD_MISO = 19;
 static constexpr uint8_t PIN_SD_SCK = 18;
-static constexpr uint8_t PIN_SBUS_TX = 17;   // Use with hardware inverter
+static constexpr uint8_t PIN_SBUS_TX = 17;   // hardware inverter output
+static constexpr uint8_t PIN_SBUS_RX = 16;   // SBUS input from external source
 
 // ---- Runtime options ----
 static constexpr uint32_t DEFAULT_STEP_TIME_MS = 50;  // override if FSEQ differs
@@ -56,42 +57,57 @@ void setup() {
   // Many users route this through GPIO expanders or UART -> inverter transistor.
   Serial1.begin(100000, SERIAL_8E2, -1, PIN_SBUS_TX, true);
 
-  // Send 5 startup frames as elevon/center values.
-  SBusEncoder::Frame starter{};
-  for (int i = 0; i < 16; i++) starter.channels[i] = 1500;
-  starter.flags = 0x00;
-  sbus.encodeFrame(starter, sbusBuffer);
-  for (int i = 0; i < 5; i++) Serial1.write(sbusBuffer, 25);
+  // Passthrough state.
+  SBusParser  inbound;
+  SBusEncoder::Frame frame{};
+  bool         sbusOverrides = false;
+
+  // SBUS input/inverted on Serial2, SBUS output/inverted on Serial1.
+  Serial2.begin(100000, SERIAL_8E2, PIN_SBUS_RX, -1, true);
+  Serial1.begin(100000, SERIAL_8E2, -1, PIN_SBUS_TX, true);
+
+  // Default neutral until we get valid SBUS input.
+  for (int i = 0; i < 16; i++) frame.channels[i] = 1500;
+  frame.flags = 0x00;
 }
 
 void loop() {
-  uint8_t channels[FSeqPlayer::NUM_SBUS_CH] = {0};
+  // Drain any available SBUS input bytes.
+  while (Serial2.available()) inbound.update(Serial2.read());
 
-  if (!fseq.readFrame(fseq, channels)) {
-    // End of show: loop back to start.
-    fseq.file.seek(fseq.channelDataOffset);
-    fseq.currentFrameOffset = 0;
+  uint32_t now = millis();
+  bool fresh = inbound.isFresh(now);
+  sbusOverrides = false;
+
+  if (fresh) {
+    SBusParser::Frame rx = inbound.getFrame();
+    for (uint8_t i = 0; i < 16; i++) if (rx.channels[i]) sbusOverrides = true;
+  }
+
+  if (!sbusOverrides) {
+    uint8_t channels[FSeqPlayer::NUM_SBUS_CH] = {0};
+
     if (!fseq.readFrame(fseq, channels)) {
-      delay(1000);
-      return;
+      fseq.file.seek(fseq.channelDataOffset);
+      fseq.currentFrameOffset = 0;
+      if (!fseq.readFrame(fseq, channels)) {
+        delay(1000);
+        return;
+      }
     }
+
+    for (uint8_t i = 0; i < FSeqPlayer::NUM_SBUS_CH; i++) {
+      frame.channels[i] = 988 + (uint32_t)channels[i] * (2011 - 988) / 255;
+    }
+  } else {
+    SBusParser::Frame rx = inbound.getFrame();
+    for (uint8_t i = 0; i < 16; i++) frame.channels[i] = rx.channels[i] ? rx.channels[i] : frame.channels[i];
   }
 
-  // Map 0..255 -> FrSky ppm range roughly 988..2011.
-  SBusEncoder::Frame frame{};
-  for (uint8_t i = 0; i < FSeqPlayer::NUM_SBUS_CH; i++) {
-    // Scale 8-bit animation to ppm range centered around ~1500us.
-    uint16_t ppm = 988 + (uint32_t)channels[i] * (2011 - 988) / 255;
-    frame.channels[i] = ppm;
-  }
   frame.flags = 0x00;
-
   sbus.encodeFrame(frame, sbusBuffer);
   Serial1.write(sbusBuffer, 25);
 
-  if (fseq.stepTimeMs) {
-    delay(fseq.stepTimeMs);
-  } else {
-    delay(DEFAULT_STEP_TIME_MS);
-  }
+  if (fseq.stepTimeMs) delay(fseq.stepTimeMs);
+  else delay(DEFAULT_STEP_TIME_MS);
 }

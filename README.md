@@ -49,6 +49,7 @@ Prereqs: PlatformIO Core.
 
 - `src/main.cpp` top-level sketch
 - `src/SBusEncoder.h/.cpp` SBUS frame builder
+- `src/SBusParser.h/.cpp` SBUS stream parser for input pass-through
 - `src/FSeqPlayer.h/.cpp` minimal FSEQ reader
 
 ## Data path
@@ -56,6 +57,12 @@ Prereqs: PlatformIO Core.
 1. Place your FSEQ file into the SD root as `sequence.fseq` or edit `DEFAULT_FSEQ_PATH`.
 2. Power up ESP32; it opens the file and begins streaming SBUS frames.
 3. Frame interval uses the FSEQ step time; falls back to 50 ms if missing.
+
+## SBUS pass-through input
+
+- SBUS input: `Serial2` on `GPIO16`, 100000/8E2/inverted
+- SBUS output: `Serial1` on `GPIO17`, 100000/8E2/inverted
+- If valid SBUS frames arrive, **all nonzero channels on the incoming stream override the FSEQ channel of the same index**, so mixer passthrough takes over the whole channel set during active input.
 
 ## FrSky SBUS output
 

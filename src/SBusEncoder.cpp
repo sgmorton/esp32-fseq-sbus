@@ -2,6 +2,25 @@
 
 SBusEncoder::SBusEncoder() = default;
 
+void SBusEncoder::encodeFrame(const Frame& frame, uint8_t* buffer) const {
+    memset(buffer, 0, 25);
+    buffer[0] = START_BYTE;
+
+    for (uint8_t ch = 0; ch < 16; ch++) {
+        uint16_t value = frame.channels[ch] & 0x07FF;
+        uint16_t bitPos = ch * 11;
+        for (uint8_t bit = 0; bit < 11; bit++) {
+            uint16_t byteIdx = 1 + (bitPos / 8);
+            uint8_t  bitIdx = bitPos % 8;
+            if (value & (1 << bit)) buffer[byteIdx] |= (1 << bitIdx);
+            bitPos++;
+        }
+    }
+
+    buffer[23] = frame.flags;
+    buffer[24] = END_BYTE;
+}
+
 uint16_t SBusEncoder::usToSbus(uint16_t us) {
     // Map 988-2011 us to 0-2047 SBUS scaled value.
     // FrSky SBUS channel is 11-bit: 0..2047.
