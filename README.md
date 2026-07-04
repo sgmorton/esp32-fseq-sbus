@@ -1,6 +1,6 @@
 # ESP32 FSEQ → SBUS Bridge
 
-Reads an xLights-generated **FSEQ** file from SD card and outputs **FrSky SBUS** commands on a UART pin, intended for use with a hardware inverter into a typical SBUS-capable mixer/receiver input.
+Reads an xLights-generated **FSEQ** file from SD card and outputs **FrSky SBUS** commands on a UART pin. The ESP32 hardware UART inversion handles SBUS logic levels, so no external inverter transistor is required.
 
 ## What this repo does
 
@@ -13,7 +13,7 @@ Reads an xLights-generated **FSEQ** file from SD card and outputs **FrSky SBUS**
 
 - ESP32 board
 - MicroSD breakout / reader wired to SPI
-- SBUS transmitter path: **ESP32 UART TX -> inverter transistor -> SBUS wire**
+- Optional: USB or direct wiring from ESP32 UART pins to SBUS mixer/FC
 
 ## Suggested wiring
 
@@ -26,15 +26,10 @@ Reads an xLights-generated **FSEQ** file from SD card and outputs **FrSky SBUS**
 | 3V3 | 3V3 |
 | GND | GND |
 
-### SBUS inverter
+### SBUS electrical notes
 
-A common inverter:
-
-| Component | Notes |
-|---|---|
-| NPN/PNP + pullup | Inverts UART idle/space levels |
-| One inverter IC | e.g. 74HC14D stage |
-| Level shifter | Optional, only if running 5V SBUS devices |
+The ESP32 hardware UART inversion is used for both SBUS input and output.
+That means the ESP32 provides the inverted logic directly on the pin, so no external inverter transistor is needed.
 
 ## Software
 
@@ -66,7 +61,7 @@ Prereqs: PlatformIO Core.
 
 ## FrSky SBUS output
 
-Raw bytes match a FrSky RX SBUS output stream; still apply an hardware stage so idle = MARK and data = SPACE at SBUS levels. Typical FrSky receivers/FCs expect that inversion.
+Output bytes match a FrSky RX SBUS stream, with hardware-level inversion included by the ESP32 UART.
 
 ## Next steps
 
